@@ -1,0 +1,289 @@
+---
+title: "Leading Causes of Death"
+author: "Matt McMonagle"
+date: "12-06-2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+library(knitr)
+library(scales)
+```
+
+## Analyze causes of death
+
+The dataset being analyzed was acquired from [data.gov](https://catalog.data.gov/dataset/nchs-leading-causes-of-death-united-states). This is data that the National Center for Health Statistics (NCHS) collected from 1999 through 2017, listing the number of deaths and the age-adjusted death rates for 10 leading causes in the United States. As someone with a family who has had many health issues, healthcare is a topic that is of particular interest to me. Analyzing the leading causes of death is a personal and familial risk assessment.
+
+The aim of this analysis is to determine the differences in leading cause of death between Pennsylvania, New York, and Ohio (neighboring states). Additionally, the trend of leading causes of death from 1999 to 2017 will be analyzed to see how they differ over the course of 19 years.
+
+```{r dataset setup}
+# Storing NCHS Leading Causes of Death in the Unites States to a variable
+deaths.df <- read.csv('/Users/mattmcmon/Library/CloudStorage/GoogleDrive-mmcmon1990@gmail.com/My Drive/CMU/R Programming/Final Project Files/NCHS_Leading_Causes_of_Death_United_States.csv', stringsAsFactors = TRUE)
+# deaths.df <- read.csv("C:\\Users\\Matt\\Google Drive\\CMU\\R Programming\\Final Project Files\\NCHS_Leading_Causes_of_Death_United_States.csv", stringsAsFactors = TRUE)
+# Removing X113.Cause.Name column since it contains similar info to Cause.Name
+deaths.df <- deaths.df[-2]
+# Changing column names to be more concise
+colnames(deaths.df) <- c("year", "cause.of.death", "state", "deaths", "death.rate")
+# Display structure of 'us_deaths'
+str(deaths.df)
+# Creating separate dataframes for the total US data and individual state data
+pa.deaths <- deaths.df[deaths.df$state == "Pennsylvania",]
+oh.deaths <- deaths.df[deaths.df$state == "Ohio",]
+ny.deaths <- deaths.df[deaths.df$state == "New York",]
+us.deaths <- deaths.df[deaths.df$state == "United States",]
+# Re-factor the 'states' variable after subsetting the original dataset
+pa.deaths$state <- factor(pa.deaths$state)
+oh.deaths$state <- factor(oh.deaths$state)
+ny.deaths$state <- factor(ny.deaths$state)
+us.deaths$state <- factor(us.deaths$state)
+```
+This data set features `r format(ncol(deaths.df), big.mark=",")` variables with a total of `r format(nrow(deaths.df), big.mark=',')` observations. The 'X113.Cause.Name' variable from the initial dataset was removed because it contained similar data to what was in the 'Cause.Name' variable. The remaining variables were renamed to be more concise. These variables are: 'year,' 'cause.of.death,' 'state,' 'deaths,' and 'death.rate.' The 'cause.of.death' variable is a factor that has 11 classifications - the top 10 causes of death and an 'All Causes' classification to show the total deaths. The 'state' variable is a factor containing 52 classifications - all 50 states, the District of Columbia, and a classification titled 'United States' to capture the total US numbers. The 'deaths' variable is the number of deaths and the 'death.rate' variable contains the age-adjusted death rates (per 100,000 population).
+
+## Exporatory Data Analysis
+
+Below is a summary of the NCHS data set to show the range of data. This summary includes rows that have the total US deaths, as well as totals for each of the causes of death. While this output is useful to see the smallest and largest number of deaths in a given year, the range isn't entirely accurate because it's comparing individual states to the entire US.
+
+The number of observations for each cause of death is the same (988 observations for each), as is the number of observations for each state (209 observations for each). Because the number of observations match, this would lead one to believe the data set is complete (no NA values). To be certain, one can run the 'is.na' function to test for incomplete fields. The output returns 0, showing that there are no NA values within the data set. We can now begin the analysis on the dataset.
+
+```{r initial dataframe summary}
+# Use summary function to display quick statistics on entire dataset
+summary(deaths.df)
+# Shows if there are any NA (missing values)
+which(is.na(deaths.df))
+```
+The next step is to narrow the focus to the selected states - Pennsylvania, Ohio, and New York - to analyze the ranges of the data.
+
+```{r state summaries}
+# Summary showing range of 'deaths' for individual states (removing "All causes" to show only individual causes)
+summary(ny.deaths$deaths[which(ny.deaths$cause.of.death != "All causes")]) # New York
+summary(pa.deaths$deaths[which(pa.deaths$cause.of.death != "All causes")]) # Pennsylvania
+summary(oh.deaths$deaths[which(oh.deaths$cause.of.death != "All causes")]) # Ohio
+# Summary showing range of 'death.rate' for total US (removing "All causes" to show only individual causes)
+summary(ny.deaths$death.rate[which(ny.deaths$cause.of.death != "All causes")]) # New York
+summary(pa.deaths$death.rate[which(pa.deaths$cause.of.death != "All causes")]) # Pennsylvania
+summary(oh.deaths$death.rate[which(oh.deaths$cause.of.death != "All causes")]) # Ohio
+```
+
+The "All causes" data was removed in the above summaries to get a more accurate look at the ranges for each state. The median number of deaths in a given year for each of the states are similar - all three states are between 4,000 and 5,000, with New York having the largest number of deaths. The median death rates are fairly close as well, with a rate of 24.40 for New York, 30.25 for Pennsylvania, and 32.10 for Ohio. The mean number of deaths in a given year have a larger range than the medians, but are still relatively similar to one anoother - New York has an average of 11,916 deaths, Pennsylvania has an average of 9,763 deaths, and Ohio has an average of 8,449 deaths.
+
+
+```{r standard deviations}
+# Show standard deviations of number of deaths for each state
+sd(ny.deaths$deaths[which(ny.deaths$cause.of.death != "All causes")]) # New York
+sd(pa.deaths$deaths[which(pa.deaths$cause.of.death != "All causes")]) # Pennsylvania
+sd(oh.deaths$deaths[which(oh.deaths$cause.of.death != "All causes")]) # Ohio
+```
+
+Similar to the summary data, the standard deviations above show that there is wide range of data when comparing all leading causes of death in a given state. New York has the largest spread of data with a standard deviation of 15,893 deaths, followed by Pennsylvania with 11,361 deaths, and finally Ohio with 9,444 deaths. We can get a closer look at this data spread by creating a table of the sum of deaths split by cause and year for each state.
+
+```{r state tables}
+# Used rdocumentation.org for reference on xtabs function 
+# New York table
+ny.table <- xtabs(deaths ~ cause.of.death + year, ny.deaths)
+kable(ny.table)
+# Pennsylvania table
+pa.table <- xtabs(deaths ~ cause.of.death + year, pa.deaths)
+kable(pa.table)
+# Ohio table
+oh.table <- xtabs(deaths ~ cause.of.death + year, oh.deaths)
+kable(oh.table)
+```
+
+The tables above show that heart disease is the leading cause of death for New York, Pennsylvania, and Ohio, followed by Cancer as the second leading cause of death for the 3 states. Another table can be created that shows the total sum of deaths by cause from 1999 to 2017.
+
+```{r death totals by state, warning=FALSE}
+# New York death totals from 1999-2017 by cause
+ny.table <- aggregate(deaths ~ cause.of.death + year, data = ny.deaths, FUN = "sum")
+ny.table <- ny.table[ny.table$cause.of.death != "All causes",]
+ny.table.sums <- data.frame(alzheimers = sum(ny.table$deaths[ny.table$cause.of.death == "Alzheimer's disease"]),
+                            cancer = sum(ny.table$deaths[ny.table$cause.of.death == "Cancer"]),
+                            clrd = sum(ny.table$deaths[ny.table$cause.of.death == "CLRD"]),
+                            diabetes = sum(ny.table$deaths[ny.table$cause.of.death == "Diabetes"]),
+                            heart.disease = sum(ny.table$deaths[ny.table$cause.of.death == "Heart disease"]),
+                            flu.pneumonia = sum(ny.table$deaths[ny.table$cause.of.death == "Influenza and pneumonia"]),
+                            kidney = sum(ny.table$deaths[ny.table$cause.of.death == "Kidney disease"]),
+                            stroke = sum(ny.table$deaths[ny.table$cause.of.death == "Stroke"]),
+                            suicide = sum(ny.table$deaths[ny.table$cause.of.death == "Suicide"]),
+                            injuries = sum(ny.table$deaths[ny.table$cause.of.death == "Unintentional injuries"]))
+kable(sort(ny.table.sums[1,], decreasing = TRUE))
+# Pennsylvania death totals from 1999-2017 by cause
+pa.table <- aggregate(deaths ~ cause.of.death + year, data = pa.deaths, FUN = "sum")
+pa.table <- pa.table[pa.table$cause.of.death != "All causes",]
+pa.table.sums <- data.frame(alzheimers = sum(pa.table$deaths[pa.table$cause.of.death == "Alzheimer's disease"]),
+                            cancer = sum(pa.table$deaths[pa.table$cause.of.death == "Cancer"]),
+                            clrd = sum(pa.table$deaths[pa.table$cause.of.death == "CLRD"]),
+                            diabetes = sum(pa.table$deaths[pa.table$cause.of.death == "Diabetes"]),
+                            heart.disease = sum(pa.table$deaths[pa.table$cause.of.death == "Heart disease"]),
+                            flu.pneumonia = sum(pa.table$deaths[pa.table$cause.of.death == "Influenza and pneumonia"]),
+                            kidney = sum(pa.table$deaths[pa.table$cause.of.death == "Kidney disease"]),
+                            stroke = sum(pa.table$deaths[pa.table$cause.of.death == "Stroke"]),
+                            suicide = sum(pa.table$deaths[pa.table$cause.of.death == "Suicide"]),
+                            injuries = sum(pa.table$deaths[pa.table$cause.of.death == "Unintentional injuries"]))
+kable(sort(pa.table.sums[1,], decreasing = TRUE))
+# Ohio death totals from 1999-2017 by cause
+oh.table <- aggregate(deaths ~ cause.of.death + year, data = oh.deaths, FUN = "sum")
+oh.table <- oh.table[oh.table$cause.of.death != "All causes",]
+oh.table.sums <- data.frame(alzheimers = sum(oh.table$deaths[oh.table$cause.of.death == "Alzheimer's disease"]),
+                            cancer = sum(oh.table$deaths[oh.table$cause.of.death == "Cancer"]),
+                            clrd = sum(oh.table$deaths[oh.table$cause.of.death == "CLRD"]),
+                            diabetes = sum(oh.table$deaths[oh.table$cause.of.death == "Diabetes"]),
+                            heart.disease = sum(oh.table$deaths[oh.table$cause.of.death == "Heart disease"]),
+                            flu.pneumonia = sum(oh.table$deaths[oh.table$cause.of.death == "Influenza and pneumonia"]),
+                            kidney = sum(oh.table$deaths[oh.table$cause.of.death == "Kidney disease"]),
+                            stroke = sum(oh.table$deaths[oh.table$cause.of.death == "Stroke"]),
+                            suicide = sum(oh.table$deaths[oh.table$cause.of.death == "Suicide"]),
+                            injuries = sum(oh.table$deaths[oh.table$cause.of.death == "Unintentional injuries"]))
+kable(sort(oh.table.sums[1,], decreasing = TRUE))
+```
+
+The tables above show that Heart disease and stroke are the top two leading causes of death for New York, Pennsylvania, and Ohio by a wide margin. The third leading cause of death for New York and Ohio is Chronic Lower Respiratory Disease (CLRD), while Pennsylvania's third leading cause is Stroke.
+
+This data can be narrowed down even further to show the specific year and cause that had the largest number of deaths.
+
+```{r sum of deaths by state and cause}
+# NY table - Removed all causes to show most significant single cause of death
+
+kable(ny.table[which.max(ny.table$deaths[ny.table$cause.of.death != "All causes"]),])
+# PA table - Removed all causes to show most significant single cause of death
+
+kable(pa.table[which.max(pa.table$deaths[pa.table$cause.of.death != "All causes"]),])
+# OH table - Removed all causes to show most significant single cause of death
+
+kable(oh.table[which.max(oh.table$deaths[oh.table$cause.of.death != "All causes"]),])
+
+```
+
+Removing the "All causes" data from the data, the tables above show that all 3 states had the highest number of single-cause deaths in 1999. The single highest cause was heart disease for all 3 states, which aligns with the data from the previous tables.
+
+## Graphical Exploratory Data Analysis
+
+The tables above can be used to create graphics as another way to display the leading causes of death for each state.
+
+```{r line graphs}
+# Used statisticsglobe.com for documentation on scale_y_continuous and reorder function
+# New York Deaths Line plot
+ggplot(ny.deaths[ny.deaths$cause.of.death != "All causes",], 
+       aes(x = year, 
+           y = deaths, 
+           color = cause.of.death)) + 
+  geom_line() +
+  xlab("Year") +
+  ylab("Deaths") +
+  ggtitle("Annual New York Deaths by Cause (1999 to 2017)") +
+  labs(color = "Cause of death") +
+  scale_y_continuous(labels = comma, breaks = seq(0, 60000, by = 10000)) +
+  scale_x_continuous(breaks = seq(1999, 2017, by = 1)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+# Pennsylvania Deaths Line plot
+ggplot(pa.deaths[pa.deaths$cause.of.death != "All causes",], 
+       aes(x = year, 
+           y = deaths, 
+           color = cause.of.death)) + 
+  geom_line() +
+  xlab("Year") +
+  ylab("Deaths") +
+  ggtitle("Annual Pennsylvania Deaths by Cause (1999 to 2017)") +
+  labs(color = "Cause of death") +
+  scale_y_continuous(labels = comma, breaks = seq(0, 50000, by = 10000)) +
+  scale_x_continuous(breaks = seq(1999, 2017, by = 1)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+# Ohio Deaths Line plot
+ggplot(oh.deaths[oh.deaths$cause.of.death != "All causes",], 
+       aes(x = year, 
+           y = deaths, 
+           color = cause.of.death)) + 
+  geom_line() +
+  xlab("Year") +
+  ylab("Deaths") +
+  ggtitle("Annual Ohio Deaths by Cause (1999 to 2017)") +
+  labs(color = "Cause of death") +
+  scale_y_continuous(labels = comma, breaks = seq(0, 40000, by = 10000)) +
+  scale_x_continuous(breaks = seq(1999, 2017, by = 1)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+The line plots shows the trends over time for the leading causes of death. The lines trend down for Heart disease from 1999 to 2017, while most of the other causes have a flat trend. There doesn't appear to be significant change in the order of causes of death throughout the 19 year span. We can also see the significant drop-off in deaths from Heart disease and Cancer to the remaining 8 causes that are all clustered closely at the bottom of the line plot. The causes at the bottom all have less than 10,000 annual deaths in New York, Pennsylvania, and Ohio.
+
+```{r barplots}
+# New York causes of death - totals from 1999 to 2017
+ggplot(ny.table[ny.table$cause.of.death != "All causes",], 
+       aes(x = reorder(cause.of.death,-deaths),
+           y = deaths,
+           color = cause.of.death,
+           fill = cause.of.death)) +
+  geom_bar(stat = "identity") +
+  xlab("Cause of Death") +
+  ylab("Deaths") +
+  ggtitle("New York Deaths by Cause (totals from 1999 to 2017)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_y_continuous(labels = comma, breaks = seq(0,1000000, by = 100000)) +
+  labs(color = "Cause of death") +
+  theme(legend.position = "none")
+
+# Pennsylvania causes of death - totals from 1999 to 2017
+ggplot(pa.table[pa.table$cause.of.death != "All causes",],
+       aes(x = reorder(cause.of.death, -deaths),
+           y = deaths,
+           color = cause.of.death,
+           fill = cause.of.death)) +
+  geom_bar(stat = "identity") +
+  xlab("Cause of Death") +
+  ylab("Deaths") +
+  ggtitle("Pennsylvania Deaths by Cause (totals from 1999 to 2017)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_y_continuous(labels = comma, breaks = seq(0,1000000, by = 100000)) +
+  theme(legend.position = "none")
+
+# Ohio causes of death - totals from 1999 to 2017
+ggplot(oh.table[oh.table$cause.of.death != "All causes",],
+       aes(x = reorder(cause.of.death, -deaths),
+           y = deaths,
+           color = cause.of.death,
+           fill = cause.of.death)) +
+  geom_bar(stat = "identity") +
+  xlab("Cause of Death") +
+  ylab("Deaths") +
+  ggtitle("Ohio Deaths by Cause (totals from 1999 to 2017)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_y_continuous(labels = comma, breaks = seq(0,1000000, by = 100000)) +
+  labs(fill = "Cause of death") +
+  theme(legend.position = "none")
+```
+
+Unlike the line plot showing a time series of annual deaths, the barplots above show the *totals* for each cause of death for the 19 year span. The bars are in descending order for ease of comparison. We can see again that Heart disease and cancer have the highest number of deaths overall from 1999 to 2017.
+
+```{r stacked barplot}
+# Obtained reference for making stacked barplot from stackoverflow.com
+ggplot(deaths.df[(deaths.df$state == "Ohio" | 
+                    deaths.df$state == "New York" | 
+                    deaths.df$state == "Pennsylvania")
+                 & deaths.df$cause.of.death != "All causes",], 
+       aes(x = cause.of.death, y = deaths, fill = state)) + 
+  geom_bar(position = "dodge", stat = "summary", fun = sum) +
+  xlab("Cause of Death") +
+  ylab("Deaths") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_y_continuous(labels = comma, breaks = seq(0,1000000, by = 100000)) +
+  labs(fill = "State")
+```
+
+Another way to view the barplot is by stacking all 3 states to compare them to one another. We can see that New York has the largest number of deaths for most of the 10 leading causes. According to US Census data, New York had an estimated population of 19.59 million, Pennsylvania had an estimated population of 12.79 million, and Ohio had an estimated population of 11.67 million. Based on the populations for each state, the number of deaths appear to be proportional.
+
+## Conclusion
+
+The NCHS data collected for Pennsylvania, Ohio, and New York supports that all 3 states have the same leading cause of death - Heart disease. Not only did heart disease have the highest number of deaths in a single year, but remained consistently the number one cause of death. Heart disease was followed by cancer for the 2nd highest cause of death for all 3 states. Collectively, Heart disease and cancer made up `r round((sum(ny.deaths$deaths[ny.deaths$cause.of.death=="Heart disease"]) + sum(ny.deaths$deaths[ny.deaths$cause.of.death=="Cancer"]))/sum(ny.deaths$deaths[ny.deaths$cause.of.death=="All causes"])*100, 2)`% of deaths for New York, `r round((sum(pa.deaths$deaths[pa.deaths$cause.of.death=="Heart disease"]) + sum(pa.deaths$deaths[pa.deaths$cause.of.death=="Cancer"]))/sum(pa.deaths$deaths[pa.deaths$cause.of.death=="All causes"])*100, 2)`% of deaths for Pennsylvania, and `r round((sum(oh.deaths$deaths[oh.deaths$cause.of.death=="Heart disease"]) + sum(oh.deaths$deaths[oh.deaths$cause.of.death=="Cancer"]))/sum(oh.deaths$deaths[oh.deaths$cause.of.death=="All causes"])*100, 2)`% of deaths for Ohio in the 19 year span. A similar proportion of deaths were caused by Heart disease and Cancer for all 3 states.
+
+The time series plots showed that there wasn't a significant change over time in the order of leading causes of death. Heart disease did trend downward overall from 199 to 2017, but still remined the leading cause of death. Unintentional injuries did trend upwards in all 3 states, but remained the 5th leading cause of death overall for New York, Pennsylvania, and Ohio.
+
+## Future Work
+
+In the future, I would like to broaden the analysis and compare regions of the United States to one another and see if the causes of death differ from region to region. It would also be interesting to find a dataset that includes global data and compare countries to see how the leading causes of death vary.
+
+
